@@ -110,7 +110,7 @@ class OneSlackSSVM(BaseSSVM):
         self.inference_cache = inference_cache
         self.objective_curve_=[]
         
-        self.tol_constraints=1e-8
+        self.tol_constraints=1e-6
         
     def _solve_1_slack_qp(self, constraints, n_samples):
         C = np.float(self.C) * n_samples  # this is how libsvm/svmstruct do it
