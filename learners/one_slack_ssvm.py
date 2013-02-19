@@ -108,20 +108,23 @@ class OneSlackSSVM(BaseSSVM):
         self.break_on_bad = break_on_bad
         self.tol = tol
         self.inference_cache = inference_cache
-
+        self.objective_curve_=[]
+        
+        self.tol_constraints=1e-8
+        
     def _solve_1_slack_qp(self, constraints, n_samples):
         C = np.float(self.C) * n_samples  # this is how libsvm/svmstruct do it
         psis = [c[0] for c in constraints]
         losses = [c[1] for c in constraints]
 
-        psi_matrix = np.vstack(psis)
+        psi_matrix = np.vstack(psis) #number of training examples X number of parameters
         n_constraints = len(psis)
         P = cvxopt.matrix(np.dot(psi_matrix, psi_matrix.T))
         # q contains loss from margin-rescaling
-        q = cvxopt.matrix(-np.array(losses, dtype=np.float))
+        q = cvxopt.matrix(-np.array(losses, dtype=np.float64))
         # constraints: all alpha must be >zero
-        idy = np.identity(n_constraints)
-        tmp1 = np.zeros(n_constraints)
+        idy = np.identity(n_constraints).astype(np.float64)
+        tmp1 = np.zeros(n_constraints,np.float64)
         # positivity constraints:
         if self.positive_constraint is None:
             #empty constraints
@@ -140,7 +143,7 @@ class OneSlackSSVM(BaseSSVM):
         b = cvxopt.matrix([C])
 
         # solve QP problem
-        cvxopt.solvers.options['feastol'] = 1e-5
+        cvxopt.solvers.options['feastol'] = self.tol_constraints
         solution = cvxopt.solvers.qp(P, q, G, h, A, b)
         if solution['status'] != "optimal":
             print("regularizing QP!")
@@ -157,16 +160,16 @@ class OneSlackSSVM(BaseSSVM):
         self.old_solution = solution
 
         # Support vectors have non zero lagrange multipliers
-        sv = a > 1e-5
+        sv = a > self.tol_constraints
         if self.verbose > 1:
-            print("%d support vectors out of %d points" % (np.sum(sv),
+            print("%d support vectors out of %d constraints" % (np.sum(sv),
                                                            n_constraints))
         w = np.dot(a, psi_matrix)
         return w, solution['primal objective']
 
     def _check_bad_constraint(self, slack, dpsi_mean, loss,
                               old_constraints, w):
-        if slack < 1e-5:
+        if slack < self.tol_constraints:
             return True
         #Ys_plain = [unwrap_pairwise(y) for y in Ys]
         #all_old_Ys = [[unwrap_pairwise(y_) for y_ in Ys_]
@@ -188,7 +191,7 @@ class OneSlackSSVM(BaseSSVM):
                 # if slack of new constraint is smaller or not
                 # significantly larger, don't add constraint.
                 # if smaller, complain about approximate inference.
-                if slack - slack_tmp < -1e-5:
+                if slack - slack_tmp < -self.tol_constraints:
                     print("bad inference: %f" % (slack_tmp - slack))
                     if self.break_on_bad:
                         from IPython.core.debugger import Tracer
@@ -241,17 +244,19 @@ class OneSlackSSVM(BaseSSVM):
                     self.problem, x, y, w, relaxed=True)
                 for x, y in zip(X, Y))
         else:
+            
             Y_hat = self.problem.batch_loss_augmented_inference(
                 X, Y, w, relaxed=True)
         # compute the mean over psis and losses
-
-        dpsi = (psi_gt - self.problem.batch_psi(X, Y_hat)) / len(X)
+     
+        dpsi = (psi_gt - self.problem.batch_psi(X, Y_hat)) / np.float64( len(X)) #mean dpsi
         loss_mean = np.mean(self.problem.batch_loss(Y, Y_hat))
 
         slack = loss_mean - np.dot(w, dpsi)
         if self._check_bad_constraint(slack, dpsi, loss_mean,
                                       constraints, w):
             raise NoConstraint
+        
         if self.verbose > 0:
             print("new slack: %f" % (slack))
         return Y_hat, dpsi, loss_mean
@@ -277,12 +282,16 @@ class OneSlackSSVM(BaseSSVM):
             and loss is the loss for predicting y_hat instead of the true label
             y.
         """
+        
+        
+        
         print("Training 1-slack dual structural SVM")
         if self.verbose < 2:
             cvxopt.solvers.options['show_progress'] = False
         else:
             cvxopt.solvers.options['show_progress'] = True
-        w = np.zeros(self.problem.size_psi)
+        
+        w = np.random.rand(self.problem.size_psi)
         if constraints is None:
             constraints = []
         loss_curve = []
@@ -302,10 +311,14 @@ class OneSlackSSVM(BaseSSVM):
                 try:
                     Y_hat, dpsi, loss_mean = self._constraint_from_cache(
                         X, Y, w, psi_gt, constraints)
+                    
                 except NoConstraint:
+                    
                     try:
+                        
                         Y_hat, dpsi, loss_mean = self._find_new_constraint(
                             X, Y, w, psi_gt, constraints)
+                        
                     except NoConstraint:
                         print("no additional constraints")
                         break
@@ -317,8 +330,9 @@ class OneSlackSSVM(BaseSSVM):
 
                 w, objective = self._solve_1_slack_qp(constraints,
                                                       n_samples=len(X))
-                if self.verbose > 0:
+                if 1:
                     print("dual objective: %f" % objective)
+
                 objective_curve.append(objective)
 
                 if (iteration > 1 and objective_curve[-2]
