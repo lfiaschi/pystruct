@@ -110,7 +110,7 @@ class OneSlackSSVM(BaseSSVM):
         self.inference_cache = inference_cache
         self.objective_curve_=[]
         
-        self.tol_constraints=1e-6
+        self.tol_constraints=1e-5
         
     def _solve_1_slack_qp(self, constraints, n_samples):
         C = np.float(self.C) * n_samples  # this is how libsvm/svmstruct do it
@@ -135,7 +135,7 @@ class OneSlackSSVM(BaseSSVM):
             zero_constr = np.zeros(len(self.positive_constraint))
 
         # put together
-        G = cvxopt.sparse(cvxopt.matrix(np.vstack((-idy, psis_constr))))
+        G = cvxopt.sparse(cvxopt.matrix(np.vstack((-idy, - psis_constr))))
         h = cvxopt.matrix(np.hstack((tmp1, zero_constr)))
 
         # equality constraint: sum of all alpha must be = C
@@ -144,11 +144,14 @@ class OneSlackSSVM(BaseSSVM):
 
         # solve QP problem
         cvxopt.solvers.options['feastol'] = self.tol_constraints
-        solution = cvxopt.solvers.qp(P, q, G, h, A, b)
+        solution = cvxopt.solvers.qp(P, q, G, h, A, b,solver='mosek')
+        
         if solution['status'] != "optimal":
+            from IPython.core.debugger import Tracer
+            Tracer()()
             print("regularizing QP!")
             P = cvxopt.matrix(np.dot(psi_matrix, psi_matrix.T)
-                              + 1e-8 * np.eye(psi_matrix.shape[0]))
+                              + 1e-5 * np.eye(psi_matrix.shape[0]))
             solution = cvxopt.solvers.qp(P, q, G, h, A, b)
             if solution['status'] != "optimal":
                 from IPython.core.debugger import Tracer

@@ -165,13 +165,19 @@ class StructuredSVM(BaseSSVM):
     def _check_bad_constraint(self, y_hat, slack, old_constraints, w):
         if slack < 1e-5:
             return True
-        y_hat_plain = unwrap_pairwise(y_hat)
+#        y_hat_plain = unwrap_pairwise(y_hat)
+#
+#        already_active = np.any([True for y__, _, _ in old_constraints
+#                                 if (y_hat_plain ==
+#                                     unwrap_pairwise(y__)).all()])
 
-        already_active = np.any([True for y__, _, _ in old_constraints
-                                 if (y_hat_plain ==
-                                     unwrap_pairwise(y__)).all()])
-        if already_active:
-            return True
+#        if already_active:
+#            return True
+#        equals = [True for dpsi_, loss_ in old_constraints
+#                  if (np.all(dpsi_ == dpsi_mean) and loss == loss_)]
+#
+#        if np.any(equals):
+#            return True
 
         # "smart" stopping criterion
         # check if most violated constraint is more violated
