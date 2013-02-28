@@ -18,16 +18,20 @@ from ..utils import find_constraint
 class LatentSSVM(BaseSSVM):
     def __init__(self, problem, max_iter=100, C=1.0, verbose=1, n_jobs=1,
                  break_on_bad=True, show_loss_every=0, base_svm='n-slack',
-                 check_constraints=True, batch_size=100, tol=0.0000001,
-                 learning_rate=0.001, positive_constraint=None):
+                 check_constraints=True, batch_size=100, tol=0.0001,
+                 learning_rate=0.001, inference_cache=0, latent_iter=5,positive_constraint=None):
+                 
         self.base_svm = base_svm
         self.check_constraints = check_constraints
         self.break_on_bad = break_on_bad
         self.batch_size = batch_size
         self.tol = tol
         self.learning_rate = learning_rate
-        
+        self.inference_cache = inference_cache
+        self.latent_iter = latent_iter
         self.positive_constraint=positive_constraint
+        
+        
         
         BaseSSVM.__init__(self, problem, max_iter, C, verbose=verbose,
                           n_jobs=n_jobs, show_loss_every=show_loss_every)
@@ -45,6 +49,7 @@ class LatentSSVM(BaseSSVM):
                 self.problem, self.max_iter, self.C, self.check_constraints,
                 verbose=self.verbose - 1, n_jobs=self.n_jobs,
                 break_on_bad=self.break_on_bad,positive_constraint=self.positive_constraint)
+                inference_cache=self.inference_cache)
         elif self.base_svm == 'subgradient':
             subsvm = SubgradientStructuredSVM(
                 self.problem, self.max_iter, self.C, verbose=self.verbose - 1,
@@ -62,7 +67,7 @@ class LatentSSVM(BaseSSVM):
         for i in range(20):
             print 
         self.objective_curve_=[]
-        for iteration in xrange(2):
+        for iteration in xrange(self.latent_iter):
             print("LATENT SVM ITERATION %d" % iteration)
             # find latent variables for ground truth:
             if iteration == 0:
